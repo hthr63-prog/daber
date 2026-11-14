@@ -19,19 +19,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: הכנסת המפתח מהכספת
-        # אותו מפתח Firebase של אפליקציית הטיול (Settings → Secrets → FIREBASE_API_KEY). בלעדיו האתר עובד בלי התחברות.
-        env:
-          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
-        run: |
-          if [ -z "$FIREBASE_API_KEY" ]; then echo "::warning::חסר הסוד FIREBASE_API_KEY. האתר יעלה בלי התחברות למשתמשים."; exit 0; fi
-          python3 - <<'PY'
-          import os, re
-          s = open('config.js', encoding='utf-8').read()
-          s, n = re.subn(r'''((?:apiKey|key)\s*:\s*)(['"])[^'"]*\2''', lambda m: m.group(1) + m.group(2) + os.environ['FIREBASE_API_KEY'] + m.group(2), s, count=1)
-          assert n == 1, 'key line not found in config.js'
-          open('config.js', 'w', encoding='utf-8').write(s)
-          PY
       - name: הכנת קבצי האתר
         run: |
           mkdir _site

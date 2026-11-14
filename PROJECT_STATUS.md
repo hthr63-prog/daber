@@ -12,12 +12,12 @@
 - חלונית "למה זה לא נכון?" עם הדגשת המילה השגויה וכ-80 כללי הסבר.
 - התחברות בשם משתמש וסיסמה (Firestore של trip-split-91938), מוכן בקוד.
 
-## מחכה למשתמש (כדי שההתחברות תעבוד באתר העצמאי)
-1. בריפו daber: Settings → Secrets and variables → Actions → New repository secret,
-   שם FIREBASE_API_KEY, ערך זהה לזה של trip-split.
-2. ב-Firebase Console של trip-split-91938 → Firestore Database → Rules: להוסיף את התוכן של firestore-daber.rules ולפרסם.
-3. אם למפתח ב-Google Cloud יש הגבלת אתרים: להוסיף https://hthr63-prog.github.io/daber/*
-4. להריץ שוב את הפרסום (Actions → פרסום האתר → Run workflow), להיכנס ולהירשם כ-Yair.b.
+## התחברות למשתמשים: מושהה
+- הקוד קיים, אבל כרגע מנותק. דַּבֵּר לא מחובר לשום מסד נתונים, וההתקדמות נשמרת בטלפון בלבד.
+- החלטת יאיר: אסור לחבר את דַּבֵּר למסד הנתונים של אפליקציית הטיול. כל ממשק צריך פרויקט Firebase משלו.
+- כדי להפעיל: ליצור פרויקט Firebase חדש ונפרד לדַּבֵּר, לפרסם בו את firestore-daber.rules, ולשים את ההגדרות שלו ב-config.js.
+  במקום spaces/.../trip/meta לחזור לאוספים daber_users / daber_names / daber_activity (הפונקציה dref ב-index.html).
+- את הסוד FIREBASE_API_KEY בריפו daber אפשר למחוק (Settings → Secrets). הוא כבר לא בשימוש.
 
 ## סעיף 4 (חוויית משחק): הושלם
 - רמת שחקן (עיגול בכותרת) וחגיגה בעלייה ברמה.

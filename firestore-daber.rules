@@ -1,5 +1,5 @@
-// כללים לדַּבֵּר. להוסיף בתוך match /databases/{database}/documents { ... } בקובץ הכללים של הפרויקט trip-split-91938,
-// ליד הכללים של אפליקציית הטיול (Firebase Console → Firestore Database → Rules), ואז Publish.
+// כללים לדַּבֵּר. להוסיף בתוך match /databases/{database}/documents { ... } בקובץ הכללים של פרויקט ה-Firebase של דַּבֵּר,
+// בפרויקט Firebase נפרד של דַּבֵּר (Firebase Console → Firestore Database → Rules), ואז Publish.
 
     // שם משתמש: רק בדיקה אם קיים ויצירה פעם אחת. אי אפשר לקבל רשימה של כל המשתמשים.
     match /daber_names/{h} {
