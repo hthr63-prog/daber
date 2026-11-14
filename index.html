@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>דַּבֵּר</title>
 <meta name="description" content="לומדים לדבר אנגלית: מסלול יומי מעברית לאנגלית">
+<script>window.APP_V="2026.11.14-1902";</script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c94d14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -405,6 +406,22 @@ textarea.wrong{border-color:var(--bad);animation:shake .45s}
 .lvprog{flex-basis:100%;display:flex;gap:10px;align-items:center;font:700 14px var(--f-display);color:var(--muted)}
 .lvprog .qbar{flex:1;height:8px;max-width:260px}
 .lvprog .qbar i{background:var(--accent)}
+/* game layer */
+.plvl{position:relative;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--accent) var(--p,0%),var(--line) 0);flex:none}
+.plvl::before{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--surface)}
+.plvl b{position:relative;font:700 15px var(--f-display);color:var(--accent)}
+.plvl i{display:none}
+.perks{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.perk{background:var(--gold-bg);color:var(--gold-text);font-weight:800;border-radius:999px;padding:6px 12px;font-size:15px}
+.surprise{display:flex;align-items:center;gap:12px;justify-content:center;width:100%;border:2px dashed var(--gold);background:var(--gold-bg);border-radius:var(--r);padding:12px;cursor:pointer;font:800 17px var(--f-body);color:var(--gold-text)}
+.surprise svg{width:52px;height:52px;color:var(--gold);animation:wob 1.6s ease-in-out infinite}
+.surprise.opened{border-style:solid;cursor:default;animation:popIn .5s var(--spring)}
+.cel{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding-block:8px}
+.cel-num{font:700 64px var(--f-display);color:var(--accent);line-height:1;animation:popIn .6s var(--spring)}
+.cel h2{font-size:26px}
+.shop{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:4px}
+.shop h3{font-size:18px}.shop p{margin:2px 0 0;color:var(--muted);font-size:15px}
+.shop .btn{flex:none}
 /* login */
 .lform{display:flex;flex-direction:column;gap:8px}
 .lform label{font-weight:700}
@@ -651,7 +668,9 @@ function webSpeech(){
 const use=n=>(window.claude&&window.claude.use)?window.claude.use(n).catch(()=>null):Promise.resolve(null);
 let SAMPLE=null,USER=null, ME=null, DB=null, REF=null, DICT=null, TTS=null, storageMode="loading";
 const LOCAL_KEY="daber-progress-v1";
-const DEFAULT={v:1,onboarded:false,start:0,goal:2,xp:0,streak:0,lastDay:null,days:{},done:{},weak:[],speakOk:0,sound:true};
+const lvlOf=x=>{let n=1;while(25*n*(n+1)<=x)n++;return n}; // level n starts at 25*n*(n-1) XP
+const lvlStart=n=>25*n*(n-1);
+const DEFAULT={v:1,coins:0,freeze:0,onboarded:false,start:0,goal:2,xp:0,streak:0,lastDay:null,days:{},done:{},weak:[],speakOk:0,sound:true};
 let S=structuredClone(DEFAULT);
 let saving=Promise.resolve();
 function save(){if(TEST)return;
@@ -699,7 +718,11 @@ function renderLogin(){
     catch(err){e.textContent=typeof err==="string"?err:"אין חיבור כרגע. בדקו את האינטרנט ונסו שוב.";$("#lin").disabled=$("#lnew").disabled=false;$("#lin").textContent="כניסה";$("#lnew").textContent="משתמש חדש"}};
   $("#lf").onsubmit=ev=>{ev.preventDefault();go(false)};$("#lnew").onclick=()=>go(true);setTimeout(()=>$("#lu").focus(),60);
 }
+/* the standalone site checks for a newer version and reloads itself when it is safe */
+async function checkUpdate(){if(!STANDALONE||TEST||!window.APP_V)return;try{const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const {v}=await r.json();
+  if(v&&v!==window.APP_V){if(view==="lesson"){checkUpdate.pending=true;return}location.reload()}}catch(e){}}
 async function boot(){
+  if(STANDALONE){document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate()});setInterval(checkUpdate,15*60*1000);setTimeout(checkUpdate,3000)}
   document.documentElement.lang="he";document.documentElement.dir="rtl";
   const tagEn=()=>document.querySelectorAll(".en:not([lang]),.tile:not([lang])").forEach(x=>x.setAttribute("lang","en"));
   new MutationObserver(tagEn).observe(document.body,{childList:true,subtree:true});tagEn();
@@ -745,7 +768,9 @@ function say(text,slow,btn){
 }
 
 /* ---------------- derived progress ---------------- */
-const shownStreak=()=>(S.lastDay===today()||S.lastDay===dayOffset(-1))?S.streak:0;
+const shownStreak0=()=>(S.lastDay===today()||S.lastDay===dayOffset(-1))?S.streak:0;
+// a streak survives missed days that the learner's streak freezes can cover
+const shownStreak=()=>{const v=shownStreak0();if(v||!S.lastDay||!S.streak)return v;const gap=Math.round((new Date(today()+"T12:00")-new Date(S.lastDay+"T12:00"))/864e5)-1;return gap<=(S.freeze||0)?S.streak:0};
 const todayLessons=()=>(S.days[today()]||{}).l||0;
 function lessonState(idx){
   const L=ALL[idx];
@@ -811,6 +836,7 @@ function topBar(){
   return `<div class="top gut"><div class="wrap">
     <div class="brand">דַּבֵּר</div>
     <div class="stat ${st?"":"off"}" id="st-streak" role="img" aria-label="${st} ימים ברצף" title="ימים ברצף" style="${st?"color:var(--accent)":""}">${ICON.flame}<span>${shownStreakV??st}</span></div>
+    <div class="plvl" role="img" aria-label="רמת שחקן ${lvlOf(S.xp)}" title="רמת שחקן"><b>${lvlOf(S.xp)}</b><i style="--p:${Math.round((S.xp-lvlStart(lvlOf(S.xp)))/(lvlStart(lvlOf(S.xp)+1)-lvlStart(lvlOf(S.xp)))*100)}%"></i></div>
     <div class="stat" id="st-xp" role="img" aria-label="${S.xp} נקודות" title="נקודות" style="color:var(--gold-text)">${ICON.bolt}<span>${shownXP??S.xp}</span></div>
     ${av}
   </div><div class="wrap tabs" role="tablist"><span class="tab-pill" aria-hidden="true"></span>
@@ -858,6 +884,7 @@ function renderHome(){
   const ms=$("#mstrip");if(ms)ms.onclick=()=>{tab="quests";renderHome();window.scrollTo(0,0)};
   app.querySelectorAll("[data-guide]").forEach(b=>b.onclick=()=>openGuide(b.dataset.guide));
   app.querySelectorAll("[data-chest]").forEach(b=>b.onclick=()=>{if(b.classList.contains("locked"))toast("התיבה נפתחת כשמסיימים את כל שלבי היחידה");else claimChest(b.dataset.chest)});
+  const bf=$("#buy-freeze");if(bf)bf.onclick=()=>{if((S.coins||0)<100||(S.freeze||0)>=2)return;S.coins-=100;S.freeze=(S.freeze||0)+1;save();vib(20);tone([[660,0,.1],[990,.1,.2]]);toast("קניתם הקפאת רצף 🧊");renderHome()};
   app.querySelectorAll("[data-quest]").forEach(b=>b.onclick=()=>claimQuest(b.dataset.quest));
   if(tab==="path"){const c=$(".node.just")||$(".node.cur");if(c&&!renderHome.scrolled){renderHome.scrolled=1;c.scrollIntoView({block:"center",behavior:JUST&&!RM()?"smooth":"auto"})}}
   if(JUST)setTimeout(()=>{JUST=null},1500);
@@ -954,7 +981,7 @@ function openGuide(key){
   el.querySelector("#g-x").onclick=close;
   el.querySelectorAll("[data-say]").forEach(b=>b.onclick=()=>say(b.dataset.say,false,b));
 }
-function addXP(n){const t=today(),d=S.days[t]||{xp:0,l:0};d.xp+=n;S.days[t]=d;S.xp+=n}
+function addXP(n){S.coins=(S.coins||0)+n;const t=today(),d=S.days[t]||{xp:0,l:0};d.xp+=n;S.days[t]=d;S.xp+=n}
 function claimChest(key){
   const [li,ui]=key.split(".").map(Number);S.chests=S.chests||{};
   if(S.chests[key]||![0,1,2].every(k=>S.done[`${li}.${ui}.${k}`]))return;
@@ -983,6 +1010,9 @@ function questsView(){
   const c=today_d().claimed||[];
   return `<div class="month"><small>משימת ${MONTHS[now.getMonth()]} · ${end===0?"נשאר היום בלבד":end===1?"נשאר יום אחד":"נשארו "+end+" ימים"}</small><h2>עמדו ביעד היומי ב-15 ימים במהלך החודש</h2>
     <div class="mbar" role="progressbar" aria-label="ימים שבהם עמדתם ביעד החודש" aria-valuenow="${goalDays}" aria-valuemax="15"><i style="width:${Math.min(100,goalDays/15*100)}%"></i></div><b style="font-family:var(--f-display)">${Math.min(goalDays,15)} / 15 ימים</b></div>
+   <div class="shop"><div><h3>🧊 הקפאת רצף</h3><p>שומרת על הרצף ביום שפספסתם. אפשר להחזיק עד 2. יש לכם: <b>${S.freeze||0}</b></p></div>
+     <button class="btn ${(S.coins||0)>=100&&(S.freeze||0)<2?"primary":""}" id="buy-freeze" ${(S.coins||0)>=100&&(S.freeze||0)<2?"":"disabled"}>🪙 100</button></div>
+   <p class="muted" style="font-size:14px;margin:6px 0 0">יש לכם 🪙 ${S.coins||0} מטבעות. כל נקודה שאתם צוברים מוסיפה מטבע.</p>
    <div class="qhead"><h2>משימות יומיות</h2><span class="muted">מתחדשות בעוד ${hrs===1?"שעה":hrs+" שעות"}</span></div>
    <div class="qlist">${quests().map(q=>{const st=c.includes(q.id)?"done":q.v>=q.n?"ready":"";return `<div class="quest"><div><h3>${q.t}</h3><div class="qbar"><i style="width:${Math.min(100,q.v/q.n*100)}%"></i><span>${Math.min(q.v,q.n)} / ${q.n}</span></div></div>
      <button class="qbtn ${st}" ${st==="ready"?`data-quest="${q.id}" aria-label="פתחו תיבה: 10 נקודות"`:`aria-label="${st==="done"?"הפרס נאסף":"עוד לא הושלם"}" tabindex="-1"`}>${st==="done"?ICON.check:ICON.chest}</button></div>`}).join("")}</div>
@@ -1091,6 +1121,7 @@ function progressView(){
     <div class="set-row"><label for="s-goal">יעד יומי</label><select id="s-goal">${[1,2,3,5].map(g=>`<option value="${g}" ${S.goal===g?"selected":""}>${g===1?"שלב אחד":g+" שלבים"} ביום</option>`).join("")}</select></div>
     <div class="set-row"><label for="s-sound">צלילי משוב</label><select id="s-sound"><option value="1" ${S.sound?"selected":""}>פועלים</option><option value="0" ${S.sound?"":"selected"}>כבויים</option></select></div>
     <div class="set-row"><span>רמת התחלה: <b class="en">${LEVELS[S.start].code}</b></span><button class="btn" id="s-replace">מבחן רמה חוזר</button></div>
+    ${window.APP_V?`<div class="set-row"><span>גרסה</span><b class="en" lang="en">${window.APP_V}</b></div>`:""}
     ${CLOUD?`<div class="set-row"><span>מחוברים בתור <b class="en" lang="en">${esc(CLOUD.name)}</b></span><button class="btn" id="s-out">יציאה מהמשתמש</button></div>`:""}
     <div class="set-row"><span>איפוס כל ההתקדמות</span><button class="btn" id="s-reset">איפוס</button></div>
     <div id="s-confirm"></div>
@@ -1655,21 +1686,37 @@ let lastResult=null;
 function finishSession(){
   unsubs.forEach(u=>{try{u()}catch(e){}});
   const jumpFail=SES.jumpTo!=null&&SES.mistakes>2;
-  const xp=jumpFail?SES.firstTry:10+SES.firstTry+(SES.mistakes===0?5:0);
+  const comboB=(SES.bestCombo||0)>=10?10:(SES.bestCombo||0)>=5?5:0,dbl=!jumpFail&&S.dbl;
+  const base=jumpFail?SES.firstTry:10+SES.firstTry+(SES.mistakes===0?5:0)+comboB,xp=dbl?base*2:base;if(dbl)S.dbl=0;
+  const lvl0=lvlOf(S.xp),st0=S.streak;let froze=0;
   const stars=SES.mistakes===0?3:SES.mistakes<=2?2:1;
   const t=today(),wasGoal=todayLessons()>=S.goal;
-  if(!jumpFail&&S.lastDay!==t){S.streak=S.lastDay===dayOffset(-1)?S.streak+1:1;S.lastDay=t}
+  if(!jumpFail&&S.lastDay!==t){
+    const gap=S.lastDay?Math.round((new Date(t+"T12:00")-new Date(S.lastDay+"T12:00"))/864e5)-1:0; // full days missed
+    if(S.lastDay===dayOffset(-1))S.streak++;
+    else if(gap>0&&gap<=(S.freeze||0)&&S.streak>0){S.freeze-=gap;froze=gap;S.streak++}
+    else S.streak=1;
+    S.lastDay=t}
   S.best=Math.max(S.best||0,S.streak);
   const d=S.days[t]||{xp:0,l:0};d.xp+=xp;if(!jumpFail){d.l+=1;if(SES.mistakes===0)d.perfect=(d.perfect||0)+1}d.oral=(d.oral||0)+SES.oral;S.days[t]=d;
   const cutoff=dayOffset(-35);Object.keys(S.days).forEach(k=>{if(k<cutoff)delete S.days[k]});
-  S.xp+=xp;
+  S.xp+=xp;S.coins=(S.coins||0)+xp;
+  const lvl1=lvlOf(S.xp),MS=[3,7,14,30,50,100,365],milestone=S.streak>st0&&MS.includes(S.streak)?S.streak:0;
+  const surprise=!jumpFail&&Math.random()<.35;
   const locked=ALL.filter((x,i)=>lessonState(i)==="locked").map(x=>x.id);
   if(SES.gram){S.gdone=S.gdone||{};const gk=SES.gram.id+"."+SES.gram.k;S.gdone[gk]=Math.max(S.gdone[gk]||0,stars)}
   if(SES.lesson){if(!S.done[SES.lesson.id])JUST={done:SES.lesson.id,wasLocked:locked};S.done[SES.lesson.id]=Math.max(S.done[SES.lesson.id]||0,stars)}
   save();
   let jump=null;if(SES.jumpTo!=null){jump={pass:SES.mistakes<=2};if(jump.pass){S.jump=Math.max(S.jump??-1,SES.jumpTo);JUST={done:null,wasLocked:locked};save()}}
-  lastResult={xp,stars,acc:Math.round(SES.firstTry/SES.total*100),title:SES.title,goalNow:!wasGoal&&todayLessons()>=S.goal,lesson:!!SES.lesson,gram:SES.gram||null,missed:SES.missed.slice(0,5),combo:SES.bestCombo||0,jump};
-  SES=null;view="result";render();sfxWin();confetti();
+  lastResult={xp,stars,acc:Math.round(SES.firstTry/SES.total*100),title:SES.title,goalNow:!wasGoal&&todayLessons()>=S.goal,lesson:!!SES.lesson,gram:SES.gram||null,missed:SES.missed.slice(0,5),combo:SES.bestCombo||0,jump,comboB,dbl:!!dbl,froze,levelUp:lvl1>lvl0?lvl1:0,milestone,surprise};
+  SES=null;view="result";render();sfxWin();confetti();if(checkUpdate.pending)setTimeout(checkUpdate,8000);
+}
+function celebrate(r){
+  const big=r.levelUp?`<div class="cel-num">${r.levelUp}</div><h2>עליתם לרמה ${r.levelUp}!</h2><p class="muted">עוד ${lvlStart(r.levelUp+1)-S.xp} נקודות לרמה הבאה.</p>`
+    :`<div class="cel-num">🔥 ${r.milestone}</div><h2>${r.milestone} ימים ברצף!</h2><p class="muted">${r.milestone>=30?"זה כבר הרגל אמיתי. מרשים!":r.milestone>=7?"שבוע שלם! ככה לומדים שפה.":"התחלה מצוינת. ממשיכים מחר!"}</p>`;
+  const {el,close}=mkSheet(`<div class="cel">${mascot("cheer",120)}${big}<button class="btn primary wide" id="cel-ok">יש!</button></div>`,"חגיגה");
+  el.querySelector("#cel-ok").onclick=close;sfxWin();confetti();
+  if(r.levelUp&&r.milestone)el.querySelector("#cel-ok").onclick=()=>{close();setTimeout(()=>celebrate({milestone:r.milestone}),300)};
 }
 function renderResult(){
   const r=lastResult,j=r.jump;
@@ -1677,6 +1724,8 @@ function renderResult(){
   app.innerHTML=`<div class="onb gut result">${mascot(j&&!j.pass?"sad":r.stars>=2||j?"cheer":"happy",104)}
    ${j?"":`<div class="big-stars" role="img" aria-label="${r.stars} כוכבים מתוך 3">${[0,1,2].map(i=>`<span class="${i<r.stars?"":"off"}">★</span>`).join("")}</div>`}
    <h1>${head}</h1><p class="muted">${esc(r.title).replace(/^(\S+) · /,'<bdi class="en">$1</bdi> · ')}${!j&&r.stars<3?". שלושה כוכבים מקבלים על שלב בלי אף טעות":""}${j&&!j.pass?". אפשר להמשיך לפי הסדר או לנסות שוב מתי שרוצים.":""}</p>
+   ${r.comboB||r.dbl||r.froze?`<div class="perks">${r.dbl?`<span class="perk">⚡ נקודות כפולות!</span>`:""}${r.comboB?`<span class="perk">🔥 בונוס רצף תשובות +${r.comboB}</span>`:""}${r.froze?`<span class="perk">🧊 הקפאת רצף שמרה על הרצף שלכם</span>`:""}</div>`:""}
+   ${r.surprise?`<button class="surprise" id="r-box" aria-label="פתחו את תיבת ההפתעה">${ICON.chest}<span>תיבת הפתעה! לחצו לפתיחה</span></button>`:""}
    ${r.goalNow?`<div class="banner">היעד היומי הושלם! הרצף עומד על ${S.streak} ${S.streak===1?"יום":"ימים"}.</div>`:""}
    <div class="res-nums"><div class="num"><b id="rc-xp" class="en" style="text-align:center">+0</b><span>נקודות</span></div><div class="num"><b id="rc-acc">0%</b><span>נכון בניסיון ראשון</span></div><div class="num"><b>${r.combo}</b><span>רצף תשובות שיא</span></div><div class="num"><b id="rc-st">${shownStreak()}</b><span>ימים ברצף</span></div></div>
    ${r.missed.length?`<div class="review"><h3>כדאי לחזור על ${r.missed.length===1?"המשפט הזה":"המשפטים האלה"}</h3>${r.missed.map(p=>`<div class="ph"><button class="ic sm" data-say="${esc(p.en)}" aria-label="השמעה">${ICON.speaker}</button><div><span class="en" lang="en">${esc(p.en)}</span><span class="he">${esc(p.he)}</span></div></div>`).join("")}</div>`:""}
@@ -1686,6 +1735,13 @@ function renderResult(){
   lastViewKey="result";const rh=document.querySelector(".result h1");if(rh){rh.tabIndex=-1;setTimeout(()=>rh.focus({preventScroll:true}),50)}
   setTimeout(()=>{countUp($("#rc-xp"),0,r.xp,900,v=>"+"+v);countUp($("#rc-acc"),0,r.acc,900,v=>v+"%")},RM()?0:700);
   app.querySelectorAll("[data-say]").forEach(b=>b.onclick=()=>say(b.dataset.say,false,b));
+  const bx=$("#r-box");if(bx)bx.onclick=()=>{if(bx.dataset.done)return;bx.dataset.done=1;bx.classList.add("opening");vib([20,40,30]);tone([[523,0,.1],[784,.08,.1],[1046,.16,.25]]);
+    const roll=Math.random();let msg;
+    if(roll<.2&&(S.freeze||0)<2){S.freeze=(S.freeze||0)+1;msg="🧊 קיבלתם הקפאת רצף! אם תפספסו יום, הרצף יישמר."}
+    else if(roll<.35){S.dbl=1;msg="⚡ נקודות כפולות בשלב הבא!"}
+    else{const n=[10,15,20,25,30,50][Math.floor(Math.random()*6)];addXP(n);msg=`🎁 +${n} נקודות!`}
+    save();setTimeout(()=>{bx.classList.remove("opening");bx.classList.add("opened");bx.innerHTML=`<span>${msg}</span>`;confetti()},RM()?0:650)};
+  if(r.levelUp||r.milestone)setTimeout(()=>celebrate(r),RM()?100:1400);
   const n=$("#r-next");if(n)n.onclick=()=>startLesson(currentIdx());
   const gn=$("#r-gnext");if(gn)gn.onclick=()=>String(r.gram.id).startsWith("s:")?startSound(r.gram.id.slice(2),r.gram.k+1):startGrammar(r.gram.id,r.gram.k+1);
   if(r.gram)$("#r-home").textContent="חזרה לפרק";
