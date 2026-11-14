@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>דַּבֵּר</title>
 <meta name="description" content="לומדים לדבר אנגלית: מסלול יומי מעברית לאנגלית">
-<script>window.APP_V="2026.11.14-1912";</script>
+<script>window.APP_V="2026.11.14-1924";</script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c94d14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -712,11 +712,13 @@ function renderLogin(){
     <p id="lerr" class="lerr" role="alert"></p>
     <button class="btn primary wide" id="lin" type="submit">כניסה</button>
     <button class="btn wide" id="lnew" type="button">משתמש חדש</button>
+    <button class="btn ghost wide" id="lskip" type="button">להמשיך בלי משתמש (ההתקדמות תישמר רק בטלפון הזה)</button>
    </form><p class="muted" style="font-size:14px">הסיסמה לא נשלחת לשום מקום. היא משמשת רק כדי לפתוח את ההתקדמות שלכם. אם שוכחים אותה, אי אפשר לשחזר.</p></div>`;
   const go=async isNew=>{const e=$("#lerr");e.textContent="";$("#lin").disabled=$("#lnew").disabled=true;$(isNew?"#lnew":"#lin").textContent="רגע…";
     try{await login($("#lu").value,$("#lp").value,isNew);view=S.onboarded?"home":"onboard";lastViewKey="";render()}
-    catch(err){e.textContent=typeof err==="string"?err:"אין חיבור כרגע. בדקו את האינטרנט ונסו שוב.";$("#lin").disabled=$("#lnew").disabled=false;$("#lin").textContent="כניסה";$("#lnew").textContent="משתמש חדש"}};
-  $("#lf").onsubmit=ev=>{ev.preventDefault();go(false)};$("#lnew").onclick=()=>go(true);setTimeout(()=>$("#lu").focus(),60);
+    catch(err){e.textContent=typeof err==="string"?err:(err&&err.code==="permission-denied")?"ההתחברות עוד לא הופעלה בשרת. אפשר להמשיך בינתיים בלי משתמש.":"אין חיבור כרגע. בדקו את האינטרנט ונסו שוב.";$("#lin").disabled=$("#lnew").disabled=false;$("#lin").textContent="כניסה";$("#lnew").textContent="משתמש חדש"}};
+  $("#lf").onsubmit=ev=>{ev.preventDefault();go(false)};$("#lnew").onclick=()=>go(true);
+  $("#lskip").onclick=()=>{try{localStorage.setItem(SESSION_KEY,JSON.stringify({skip:1}))}catch(e){}CLOUD=null;loadLocal();storageMode="local";view=S.onboarded?"home":"onboard";lastViewKey="";render()};setTimeout(()=>$("#lu").focus(),60);
 }
 /* the standalone site checks for a newer version and reloads itself when it is safe */
 async function checkUpdate(){if(!STANDALONE||TEST||!window.APP_V)return;try{const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const {v}=await r.json();
@@ -731,7 +733,8 @@ async function boot(){
   use("sample").then(x=>{SAMPLE=x});
   const timer=new Promise(r=>setTimeout(()=>r("timeout"),10000));
   if(hasCloud()){let ses=null;try{ses=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){}
-    if(ses&&ses.name&&ses.key){try{await openAccount(ses.name,ses.key)}catch(e){try{const l=localStorage.getItem(LOCAL_KEY+":"+ses.name);if(l)S={...DEFAULT,...JSON.parse(l)}}catch(e2){}CLOUD={name:ses.name,key:ses.key,ref:fsdb().collection("daber_users").doc(ses.key)};storageMode="error"}
+    if(ses&&ses.skip){loadLocal();storageMode="local";view=S.onboarded?"home":"onboard";render()}
+    else if(ses&&ses.name&&ses.key){try{await openAccount(ses.name,ses.key)}catch(e){try{const l=localStorage.getItem(LOCAL_KEY+":"+ses.name);if(l)S={...DEFAULT,...JSON.parse(l)}}catch(e2){}CLOUD={name:ses.name,key:ses.key,ref:fsdb().collection("daber_users").doc(ses.key)};storageMode="error"}
       view=S.onboarded?"home":"onboard";render()}
     else{view="login";render()}
     return}
@@ -1122,6 +1125,7 @@ function progressView(){
     <div class="set-row"><label for="s-sound">צלילי משוב</label><select id="s-sound"><option value="1" ${S.sound?"selected":""}>פועלים</option><option value="0" ${S.sound?"":"selected"}>כבויים</option></select></div>
     <div class="set-row"><span>רמת התחלה: <b class="en">${LEVELS[S.start].code}</b></span><button class="btn" id="s-replace">מבחן רמה חוזר</button></div>
     ${window.APP_V?`<div class="set-row"><span>גרסה</span><b class="en" lang="en">${window.APP_V}</b></div>`:""}
+    ${!CLOUD&&hasCloud()?`<div class="set-row"><span>אתם לא מחוברים למשתמש</span><button class="btn" id="s-login">התחברות</button></div>`:""}
     ${CLOUD?`<div class="set-row"><span>מחוברים בתור <b class="en" lang="en">${esc(CLOUD.name)}</b></span><button class="btn" id="s-out">יציאה מהמשתמש</button></div>`:""}
     <div class="set-row"><span>איפוס כל ההתקדמות</span><button class="btn" id="s-reset">איפוס</button></div>
     <div id="s-confirm"></div>
@@ -1133,6 +1137,7 @@ function bindProgress(){
   $("#s-sound").onchange=e=>{S.sound=e.target.value==="1";save()};
   $("#s-replace").onclick=()=>{onb={step:2,goal:S.goal,start:null,placement:null,redo:true};view="onboard";render()};
   const so=$("#s-out");if(so)so.onclick=logout;
+  const sl=$("#s-login");if(sl)sl.onclick=()=>{view="login";render()};
   $("#s-reset").onclick=()=>{$("#s-confirm").innerHTML=`<div class="confirm" role="alert"><span style="flex:1">למחוק את כל הנקודות, הרצף והשלבים? אי אפשר לבטל את זה.</span><button class="btn" id="s-no">ביטול</button><button class="btn primary" id="s-yes" style="background:var(--bad);box-shadow:none">מחיקה</button></div>`;
     $("#s-no").focus();$("#s-no").onclick=()=>{$("#s-confirm").innerHTML="";$("#s-reset").focus()};
     $("#s-yes").onclick=()=>{S=structuredClone(DEFAULT);save();onb={step:0,goal:2,start:null,placement:null};view="onboard";render()}};
