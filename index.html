@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>דַּבֵּר</title>
 <meta name="description" content="לומדים לדבר אנגלית: מסלול יומי מעברית לאנגלית">
-<script>window.APP_V="2026.11.14-1902";</script>
+<script>window.APP_V="2026.11.14-1908";</script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c94d14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1711,7 +1711,7 @@ function finishSession(){
   lastResult={xp,stars,acc:Math.round(SES.firstTry/SES.total*100),title:SES.title,goalNow:!wasGoal&&todayLessons()>=S.goal,lesson:!!SES.lesson,gram:SES.gram||null,missed:SES.missed.slice(0,5),combo:SES.bestCombo||0,jump,comboB,dbl:!!dbl,froze,levelUp:lvl1>lvl0?lvl1:0,milestone,surprise};
   SES=null;view="result";render();sfxWin();confetti();if(checkUpdate.pending)setTimeout(checkUpdate,8000);
 }
-function celebrate(r){
+function celebrate(r){if(view!=="result"||document.querySelector(".sheet"))return; // never interrupt a lesson
   const big=r.levelUp?`<div class="cel-num">${r.levelUp}</div><h2>עליתם לרמה ${r.levelUp}!</h2><p class="muted">עוד ${lvlStart(r.levelUp+1)-S.xp} נקודות לרמה הבאה.</p>`
     :`<div class="cel-num">🔥 ${r.milestone}</div><h2>${r.milestone} ימים ברצף!</h2><p class="muted">${r.milestone>=30?"זה כבר הרגל אמיתי. מרשים!":r.milestone>=7?"שבוע שלם! ככה לומדים שפה.":"התחלה מצוינת. ממשיכים מחר!"}</p>`;
   const {el,close}=mkSheet(`<div class="cel">${mascot("cheer",120)}${big}<button class="btn primary wide" id="cel-ok">יש!</button></div>`,"חגיגה");
