@@ -1,0 +1,25 @@
+# דַּבֵּר: מצב הפרויקט
+
+## איפה הכול נמצא
+- אתר עצמאי (סמל למסך הבית): https://hthr63-prog.github.io/daber/ (ריפו hthr63-prog/daber, פרסום אוטומטי ב-push ל-main)
+- גרסה ב-claude.ai (חשבון Claude): https://claude.ai/artifact/JRPuZnFSY3U8DMWcvCq266
+- גרסת טסט ב-claude.ai (לא שומרת כלום): https://claude.ai/artifact/Ecd3wSJ81ArqU2nJXp6gw3
+- קוד המקור: index.html הוא דף אחד. בגרסאות ב-claude.ai אותו קוד עם TEST=true/false.
+
+## הושלם
+- מסלול 8 רמות (A1 עד ★), 28 יחידות, 336 משפטים, 280 מילים, 15 פרקי דקדוק, 9 פרקי צלילים.
+- 60/20/20 דיבור/קריאה/כתיבה, מבחן רמה בארבע מיומנויות, מבחן קפיצה, משימות, תיבות, רצף.
+- חלונית "למה זה לא נכון?" עם הדגשת המילה השגויה וכ-80 כללי הסבר.
+- התחברות בשם משתמש וסיסמה (Firestore של trip-split-91938), מוכן בקוד.
+
+## מחכה למשתמש (כדי שההתחברות תעבוד באתר העצמאי)
+1. בריפו daber: Settings → Secrets and variables → Actions → New repository secret,
+   שם FIREBASE_API_KEY, ערך זהה לזה של trip-split.
+2. ב-Firebase Console של trip-split-91938 → Firestore Database → Rules: להוסיף את התוכן של firestore-daber.rules ולפרסם.
+3. אם למפתח ב-Google Cloud יש הגבלת אתרים: להוסיף https://hthr63-prog.github.io/daber/*
+4. להריץ שוב את הפרסום (Actions → פרסום האתר → Run workflow), להיכנס ולהירשם כ-Yair.b.
+
+## הבא בתור
+1. חוויית משחק (ליגות, רצפי משימות, הקפאת רצף, בונוסים, אנימציות עלייה ברמה).
+2. תזכורת יומית ב-20:00 (שעון תאילנד): משימה מתוזמנת של Claude שבודקת ב-Firestore אם Yair.b עשה שלב היום,
+   ושולחת התראה לטלפון רק אם לא עשה. דורש את שלבי ההתחברות למעלה.
