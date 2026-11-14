@@ -15,3 +15,11 @@
                     && request.resource.data.keys().hasOnly(['data','at'])
                     && request.resource.data.data is string && request.resource.data.data.size() < 500000;
     }
+
+    // מתי המשתמש תרגל לאחרונה (בלי נתונים אישיים). משמש את התזכורת היומית.
+    match /daber_activity/{h} {
+      allow get: if h.matches('^[a-f0-9]{64}$');
+      allow create, update: if h.matches('^[a-f0-9]{64}$')
+                    && request.resource.data.keys().hasOnly(['last','lessons','at'])
+                    && request.resource.data.last is string && request.resource.data.last.size() <= 10;
+    }

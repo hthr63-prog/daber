@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>דַּבֵּר</title>
 <meta name="description" content="לומדים לדבר אנגלית: מסלול יומי מעברית לאנגלית">
-<script>window.APP_V="2026.11.14-1908";</script>
+<script>window.APP_V="2026.11.14-1912";</script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c94d14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -675,7 +675,7 @@ let S=structuredClone(DEFAULT);
 let saving=Promise.resolve();
 function save(){if(TEST)return;
   const snap=JSON.parse(JSON.stringify(S));
-  if(CLOUD){clearTimeout(save.t);save.t=setTimeout(()=>{saving=saving.then(()=>CLOUD.ref.set({data:JSON.stringify(snap),at:Date.now()})).then(()=>{if(storageMode==="error"){storageMode="cloud";render()}}).catch(()=>{storageMode="error";render()})},400);try{localStorage.setItem(LOCAL_KEY+":"+CLOUD.name,JSON.stringify(snap))}catch(e){}return}
+  if(CLOUD){clearTimeout(save.t);save.t=setTimeout(()=>{saving=saving.then(()=>CLOUD.ref.set({data:JSON.stringify(snap),at:Date.now()}).then(()=>sha("daber-act:"+CLOUD.name)).then(h=>fsdb().collection("daber_activity").doc(h).set({last:snap.lastDay||"",lessons:((snap.days||{})[snap.lastDay]||{}).l||0,at:Date.now()}))).then(()=>{if(storageMode==="error"){storageMode="cloud";render()}}).catch(()=>{storageMode="error";render()})},400);try{localStorage.setItem(LOCAL_KEY+":"+CLOUD.name,JSON.stringify(snap))}catch(e){}return}
   if(REF){saving=saving.then(()=>REF.set(snap)).catch(()=>{storageMode="error";render()});}
   else{try{localStorage.setItem(LOCAL_KEY,JSON.stringify(snap))}catch(e){}}
 }
