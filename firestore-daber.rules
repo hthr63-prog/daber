@@ -1,0 +1,17 @@
+// כללים לדַּבֵּר. להוסיף בתוך match /databases/{database}/documents { ... } בקובץ הכללים של הפרויקט trip-split-91938,
+// ליד הכללים של אפליקציית הטיול (Firebase Console → Firestore Database → Rules), ואז Publish.
+
+    // שם משתמש: רק בדיקה אם קיים ויצירה פעם אחת. אי אפשר לקבל רשימה של כל המשתמשים.
+    match /daber_names/{h} {
+      allow get: if h.matches('^[a-f0-9]{64}$');
+      allow create: if h.matches('^[a-f0-9]{64}$')
+                    && request.resource.data.keys().hasOnly(['vk','at'])
+                    && request.resource.data.vk is string && request.resource.data.vk.size() == 64;
+    }
+    // ההתקדמות של כל משתמש, תחת מפתח שנגזר מהסיסמה שלו. בלי רשימה ובלי מחיקה.
+    match /daber_users/{k} {
+      allow get: if k.matches('^[a-f0-9]{64}$');
+      allow create, update: if k.matches('^[a-f0-9]{64}$')
+                    && request.resource.data.keys().hasOnly(['data','at'])
+                    && request.resource.data.data is string && request.resource.data.data.size() < 500000;
+    }

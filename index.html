@@ -12,6 +12,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="דַּבֵּר">
 <link rel="apple-touch-icon" href="icon-180.png">
+<script src="vendor/firebase-app-compat-10.12.2.js"></script>
+<script src="vendor/firebase-firestore-compat-10.12.2.js"></script>
+<script src="config.js"></script>
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
@@ -402,6 +405,12 @@ textarea.wrong{border-color:var(--bad);animation:shake .45s}
 .lvprog{flex-basis:100%;display:flex;gap:10px;align-items:center;font:700 14px var(--f-display);color:var(--muted)}
 .lvprog .qbar{flex:1;height:8px;max-width:260px}
 .lvprog .qbar i{background:var(--accent)}
+/* login */
+.lform{display:flex;flex-direction:column;gap:8px}
+.lform label{font-weight:700}
+.lform input{font:500 19px var(--f-en);padding:12px 14px;border-radius:14px;border:2px solid var(--border-strong);background:var(--surface);color:var(--ink);text-align:left}
+.lform input:focus{outline:none;border-color:var(--read);box-shadow:0 0 0 4px color-mix(in srgb,var(--read) 20%,transparent)}
+.lerr{color:var(--bad);font-weight:600;min-height:1.2em;margin:4px 0}
 /* mistake explainer */
 u.good{color:var(--good);font-weight:800;text-decoration:underline solid 3px;text-underline-offset:5px;background:var(--good-bg);border-radius:4px;padding:0 3px}
 u.bad{color:var(--bad);font-weight:800;text-decoration:underline wavy 2px;text-underline-offset:5px;background:var(--bad-bg);border-radius:4px;padding:0 3px}
@@ -647,10 +656,49 @@ let S=structuredClone(DEFAULT);
 let saving=Promise.resolve();
 function save(){if(TEST)return;
   const snap=JSON.parse(JSON.stringify(S));
+  if(CLOUD){clearTimeout(save.t);save.t=setTimeout(()=>{saving=saving.then(()=>CLOUD.ref.set({data:JSON.stringify(snap),at:Date.now()})).then(()=>{if(storageMode==="error"){storageMode="cloud";render()}}).catch(()=>{storageMode="error";render()})},400);try{localStorage.setItem(LOCAL_KEY+":"+CLOUD.name,JSON.stringify(snap))}catch(e){}return}
   if(REF){saving=saving.then(()=>REF.set(snap)).catch(()=>{storageMode="error";render()});}
   else{try{localStorage.setItem(LOCAL_KEY,JSON.stringify(snap))}catch(e){}}
 }
 function loadLocal(){if(TEST)return;try{const v=localStorage.getItem(LOCAL_KEY);if(v)S={...DEFAULT,...JSON.parse(v)}}catch(e){}}
+/* ---------- accounts for the standalone site: username + password, progress in Firestore ----------
+   The password never leaves the device: a key is derived from it (PBKDF2) and only the key's
+   hash identifies the account. Same pattern as the trip app's personal accounts. */
+let CLOUD=null;const SESSION_KEY="daber-session-v1";
+const hasCloud=()=>STANDALONE&&!TEST&&window.firebase&&window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey;
+const hex=buf=>[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+const sha=async t=>hex(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t)));
+async function deriveKey(name,pw){const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveBits"]);
+  return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:new TextEncoder().encode("daber:"+name),iterations:150000,hash:"SHA-256"},base,256))}
+let FS=null;const fsdb=()=>{if(!FS){if(!firebase.apps.length)firebase.initializeApp(window.FIREBASE_CONFIG);FS=firebase.firestore()}return FS};
+async function openAccount(name,key){const db=fsdb();CLOUD={name,key,ref:db.collection("daber_users").doc(key)};
+  const snap=await CLOUD.ref.get();if(snap.exists){try{S={...DEFAULT,...JSON.parse(snap.data().data)}}catch(e){}}else S=structuredClone(DEFAULT);storageMode="cloud"}
+async function login(name,pw,isNew){
+  name=name.trim().toLowerCase();if(!/^[a-z0-9._-]{3,30}$/.test(name))throw "שם המשתמש צריך להיות באנגלית, 3 עד 30 תווים (אותיות, ספרות, נקודה או מקף).";
+  if(pw.length<4)throw "הסיסמה צריכה להיות לפחות 4 תווים.";
+  const db=fsdb(),nh=await sha("daber-name:"+name),key=await deriveKey(name,pw),vk=await sha("daber-vk:"+key),nref=db.collection("daber_names").doc(nh);
+  const ns=await nref.get();
+  if(isNew){if(ns.exists)throw "שם המשתמש הזה כבר תפוס. נסו שם אחר, או היכנסו עם הסיסמה שלו.";await nref.set({vk,at:Date.now()})}
+  else{if(!ns.exists)throw "לא מצאנו משתמש בשם הזה. אם זו הפעם הראשונה, לחצו \"משתמש חדש\".";if(ns.data().vk!==vk)throw "הסיסמה לא נכונה. נסו שוב."}
+  await openAccount(name,key);
+  try{localStorage.setItem(SESSION_KEY,JSON.stringify({name,key}))}catch(e){}
+}
+function logout(){try{localStorage.removeItem(SESSION_KEY)}catch(e){}CLOUD=null;S=structuredClone(DEFAULT);shownXP=null;shownStreakV=null;shownRing=null;view="login";render()}
+function renderLogin(){
+  app.innerHTML=`<div class="onb gut view-in">${mascot("happy",108)}<h1>ברוכים הבאים ל<span>דַּבֵּר</span></h1>
+   <p class="muted">היכנסו עם המשתמש שלכם, כדי שההתקדמות תישמר ותחכה לכם בכל מכשיר.</p>
+   <form id="lf" class="lform" novalidate>
+    <label for="lu">שם משתמש</label><input id="lu" dir="ltr" lang="en" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+    <label for="lp">סיסמה</label><input id="lp" type="password" dir="ltr" autocomplete="current-password" required>
+    <p id="lerr" class="lerr" role="alert"></p>
+    <button class="btn primary wide" id="lin" type="submit">כניסה</button>
+    <button class="btn wide" id="lnew" type="button">משתמש חדש</button>
+   </form><p class="muted" style="font-size:14px">הסיסמה לא נשלחת לשום מקום. היא משמשת רק כדי לפתוח את ההתקדמות שלכם. אם שוכחים אותה, אי אפשר לשחזר.</p></div>`;
+  const go=async isNew=>{const e=$("#lerr");e.textContent="";$("#lin").disabled=$("#lnew").disabled=true;$(isNew?"#lnew":"#lin").textContent="רגע…";
+    try{await login($("#lu").value,$("#lp").value,isNew);view=S.onboarded?"home":"onboard";lastViewKey="";render()}
+    catch(err){e.textContent=typeof err==="string"?err:"אין חיבור כרגע. בדקו את האינטרנט ונסו שוב.";$("#lin").disabled=$("#lnew").disabled=false;$("#lin").textContent="כניסה";$("#lnew").textContent="משתמש חדש"}};
+  $("#lf").onsubmit=ev=>{ev.preventDefault();go(false)};$("#lnew").onclick=()=>go(true);setTimeout(()=>$("#lu").focus(),60);
+}
 async function boot(){
   document.documentElement.lang="he";document.documentElement.dir="rtl";
   const tagEn=()=>document.querySelectorAll(".en:not([lang]),.tile:not([lang])").forEach(x=>x.setAttribute("lang","en"));
@@ -659,6 +707,11 @@ async function boot(){
   use("tts").then(t=>{TTS=t});
   use("sample").then(x=>{SAMPLE=x});
   const timer=new Promise(r=>setTimeout(()=>r("timeout"),10000));
+  if(hasCloud()){let ses=null;try{ses=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){}
+    if(ses&&ses.name&&ses.key){try{await openAccount(ses.name,ses.key)}catch(e){try{const l=localStorage.getItem(LOCAL_KEY+":"+ses.name);if(l)S={...DEFAULT,...JSON.parse(l)}}catch(e2){}CLOUD={name:ses.name,key:ses.key,ref:fsdb().collection("daber_users").doc(ses.key)};storageMode="error"}
+      view=S.onboarded?"home":"onboard";render()}
+    else{view="login";render()}
+    return}
   const ready=(async()=>{if(TEST){storageMode="test";return}
     USER=await use("user");
     if(USER){try{ME=await USER.me()}catch(e){}}
@@ -746,6 +799,7 @@ let shownXP=null,shownStreakV=null,shownRing=null,lastViewKey="",pillPos=null,JU
 let view="loading", tab="path", onb={step:0,goal:2,start:null,placement:null};
 const app=$("#app");
 function render(){
+  if(view==="login")return renderLogin();
   if(view==="onboard")return renderOnboard();
   if(view==="lesson")return; // lesson renders itself
   if(view==="result")return renderResult();
@@ -772,6 +826,7 @@ function storageBanner(){
     <div class="ttools"><button class="btn" data-t="unlock">${S.unlockAll?"נעילה רגילה":"פתיחת כל השלבים"}</button><button class="btn" data-t="day">דילוג ליום הבא</button><button class="btn" data-t="xp">+100 XP</button><button class="btn" data-t="quests">השלמת משימות היום</button><button class="btn" data-t="reset">התחלה מחדש</button></div></div>`;
   if(storageMode==="local"&&STANDALONE)return "";
   if(storageMode==="local")return `<div class="banner">ההתקדמות נשמרת כרגע רק בדפדפן הזה. כדי לשמור אותה בחשבון שלכם, פתחו את הדף כשאתם מחוברים ל-claude.ai.</div>`;
+  if(storageMode==="error"&&CLOUD)return `<div class="banner">אין חיבור כרגע. ההתקדמות נשמרת במכשיר ותעלה לחשבון כשהחיבור יחזור.</div>`;
   if(storageMode==="error")return `<div class="banner">לא הצלחנו לשמור את ההתקדמות בחשבון. ננסה שוב אוטומטית בסיום השלב הבא.</div>`;
   return "";
 }
@@ -1036,6 +1091,7 @@ function progressView(){
     <div class="set-row"><label for="s-goal">יעד יומי</label><select id="s-goal">${[1,2,3,5].map(g=>`<option value="${g}" ${S.goal===g?"selected":""}>${g===1?"שלב אחד":g+" שלבים"} ביום</option>`).join("")}</select></div>
     <div class="set-row"><label for="s-sound">צלילי משוב</label><select id="s-sound"><option value="1" ${S.sound?"selected":""}>פועלים</option><option value="0" ${S.sound?"":"selected"}>כבויים</option></select></div>
     <div class="set-row"><span>רמת התחלה: <b class="en">${LEVELS[S.start].code}</b></span><button class="btn" id="s-replace">מבחן רמה חוזר</button></div>
+    ${CLOUD?`<div class="set-row"><span>מחוברים בתור <b class="en" lang="en">${esc(CLOUD.name)}</b></span><button class="btn" id="s-out">יציאה מהמשתמש</button></div>`:""}
     <div class="set-row"><span>איפוס כל ההתקדמות</span><button class="btn" id="s-reset">איפוס</button></div>
     <div id="s-confirm"></div>
   </div></div>`;
@@ -1045,6 +1101,7 @@ function bindProgress(){
   g.onchange=()=>{S.goal=+g.value;save();renderHome();$("#s-goal").focus()};
   $("#s-sound").onchange=e=>{S.sound=e.target.value==="1";save()};
   $("#s-replace").onclick=()=>{onb={step:2,goal:S.goal,start:null,placement:null,redo:true};view="onboard";render()};
+  const so=$("#s-out");if(so)so.onclick=logout;
   $("#s-reset").onclick=()=>{$("#s-confirm").innerHTML=`<div class="confirm" role="alert"><span style="flex:1">למחוק את כל הנקודות, הרצף והשלבים? אי אפשר לבטל את זה.</span><button class="btn" id="s-no">ביטול</button><button class="btn primary" id="s-yes" style="background:var(--bad);box-shadow:none">מחיקה</button></div>`;
     $("#s-no").focus();$("#s-no").onclick=()=>{$("#s-confirm").innerHTML="";$("#s-reset").focus()};
     $("#s-yes").onclick=()=>{S=structuredClone(DEFAULT);save();onb={step:0,goal:2,start:null,placement:null};view="onboard";render()}};
@@ -1365,6 +1422,60 @@ function diffOps(t,g){ // LCS alignment -> [{op:"eq"|"del"|"ins"|"sub",a,b}]
   return ops;
 }
 const bb=w=>`<b class="en" lang="en">${esc(w)}</b>`;
+// word pairs Hebrew speakers confuse: "<right>|<wrong>" -> [title, explanation]
+const PAIRX={
+ "told|said":["say או tell","אחרי tell בא מי ששומע: "+"<b class=en>told me</b>. אחרי say לא בא אדם ישירות: <b class=en>said that…</b> או <b class=en>said to me</b>. לכן She told me, ולא She said me."],
+ "tell|say":["say או tell","tell + אדם: <b class=en>tell me</b>, <b class=en>tell him</b>. say בלי אדם: <b class=en>say hello</b>, <b class=en>say that…</b>."],
+ "said|told":["say או tell","say לא בא עם אדם ישירות אחריו. אומרים <b class=en>he said that…</b>, ו-tell רק כשאומרים למי: <b class=en>he told me</b>."],
+ "make|do":["make או do","make = ליצור משהו (<b class=en>make a cake</b>, <b class=en>make a mistake</b>, <b class=en>make a decision</b>). do = לבצע פעולה או משימה (<b class=en>do homework</b>, <b class=en>do the dishes</b>)."],
+ "do|make":["make או do","do לפעולות ומשימות: <b class=en>do your homework</b>, <b class=en>do sport</b>. make כשנוצר משהו: <b class=en>make dinner</b>."],
+ "made|did":["make או do","make = ליצור (<b class=en>made a mistake</b>), do = לבצע (<b class=en>did the work</b>)."],
+ "for|since":["for או since","for + משך זמן (<b class=en>for three years</b>, <b class=en>for an hour</b>). since + נקודת התחלה (<b class=en>since 2020</b>, <b class=en>since Monday</b>)."],
+ "since|for":["for או since","since + נקודת התחלה: <b class=en>since Monday</b>, <b class=en>since I was a child</b>. for + משך: <b class=en>for two weeks</b>."],
+ "many|much":["much או many","many לדברים שסופרים (<b class=en>many people</b>, <b class=en>many books</b>), much לדברים שלא סופרים (<b class=en>much water</b>, <b class=en>much time</b>)."],
+ "much|many":["much או many","much לדברים שלא סופרים: <b class=en>much money</b>, <b class=en>much time</b>. many לדברים שסופרים: <b class=en>many friends</b>."],
+ "teach|learn":["learn או teach","learn = ללמוד (התלמיד), teach = ללמד (המורה). <b class=en>She teaches me English</b>, <b class=en>I learn English</b>."],
+ "learn|teach":["learn או teach","learn = ללמוד בעצמכם, teach = ללמד מישהו אחר."],
+ "lend|borrow":["borrow או lend","borrow = לשאול ממישהו (<b class=en>Can I borrow your pen?</b>), lend = להשאיל למישהו (<b class=en>Can you lend me your pen?</b>)."],
+ "borrow|lend":["borrow או lend","borrow = לקחת בהשאלה, lend = לתת בהשאלה."],
+ "too|very":["very או too","very = מאוד. too = יותר מדי, עם תחושה שזה בעיה: <b class=en>too expensive for me</b>."],
+ "very|too":["very או too","too = יותר מדי (שלילי). אם הכוונה רק \"מאוד\", אומרים <b class=en>very</b>."],
+ "who|which":["who או which","who לאנשים (<b class=en>the man who…</b>), which לדברים (<b class=en>the book which…</b>)."],
+ "which|who":["who או which","which לדברים ולבעלי חיים, who לאנשים."],
+ "are|is":["people / police הם רבים","מילים כמו <b class=en>people</b>, <b class=en>police</b>, <b class=en>children</b> הן רבים באנגלית: <b class=en>people are</b>, ולא people is."],
+ "am|have":["גיל: be ולא have","באנגלית לא \"יש לי\" שנים אלא \"אני\" שנים: <b class=en>I am twenty years old</b>, ולא I have twenty years."],
+ "is|has":["be ולא have","בגיל, ובתחושות כמו רעב, קר או צמא, משתמשים ב-be: <b class=en>She is ten</b>, <b class=en>I am cold</b>."],
+ "on|in":["in / on / at בזמנים","on + יום או תאריך (<b class=en>on Monday</b>), in + חודש, שנה או חלק מהיום (<b class=en>in May</b>, <b class=en>in the morning</b>), at + שעה (<b class=en>at seven</b>)."],
+ "in|on":["in / on / at בזמנים","in + חודש, שנה, עונה או חלק מהיום (<b class=en>in the evening</b>). on לימים ותאריכים."],
+ "at|in":["in / on / at","at + שעה או נקודה מדויקת (<b class=en>at seven</b>, <b class=en>at night</b>, <b class=en>at home</b>). in + מקום סגור או תקופה."],
+ "to|with":["married to","באנגלית מתחתנים <b>עם</b> מישהו בעזרת to: <b class=en>married to</b>, ולא married with."],
+ "on|of":["depend on","אומרים <b class=en>depend on</b>, ולא depend of, למרות ש\"תלוי ב…\" בעברית."],
+ "at|in ":["good at","טובים <b>ב</b>משהו באנגלית זה <b class=en>good at</b>: <b class=en>good at math</b>."],
+ "anything|nothing":["שלילה כפולה","באנגלית יש רק שלילה אחת במשפט: <b class=en>I don't know anything</b>, ולא I don't know nothing (שבעברית נשמע טבעי: \"אני לא יודע כלום\")."],
+ "anyone|nobody":["שלילה כפולה","שלילה אחת מספיקה: <b class=en>I didn't see anyone</b>, ולא I didn't see nobody."],
+ "ever|never":["שלילה כפולה","אם כבר יש not במשפט, משתמשים ב-ever: <b class=en>I don't ever…</b>. או בלי not: <b class=en>I never…</b>."],
+ "how|what":["What … like?","\"איך הוא?\" באנגלית: <b class=en>What is he like?</b>. ו\"איך קוראים לך?\" זה <b class=en>What is your name?</b>, לא How."],
+ "what|how":["How או What","How = איך (באיזו דרך). What = מה. \"מה שלומך?\" זה <b class=en>How are you?</b>."],
+ "fun|funny":["fun או funny","fun = כיף, נהנים. funny = מצחיק, צוחקים."],
+ "funny|fun":["fun או funny","funny = מצחיק. fun = כיף."],
+ "bored|boring":["bored או boring","ed = מה שאתם מרגישים (<b class=en>I am bored</b> = משעמם לי). ing = מה שגורם לזה (<b class=en>The movie is boring</b>)."],
+ "boring|bored":["bored או boring","ing מתאר את הדבר: <b class=en>a boring movie</b>. ed מתאר את ההרגשה: <b class=en>I am bored</b>."],
+ "interested|interesting":["interested או interesting","<b class=en>I am interested in art</b> = אני מתעניין. <b class=en>It is interesting</b> = זה מעניין."],
+ "interesting|interested":["interested או interesting","ing לדבר עצמו: <b class=en>an interesting book</b>. ed לאדם: <b class=en>I am interested</b>."],
+ "tired|tiring":["tired או tiring","<b class=en>I am tired</b> = אני עייף. <b class=en>The trip was tiring</b> = הטיול היה מעייף."],
+ "home|house":["home או house","home = הבית שלי, המקום שלי (<b class=en>go home</b>, <b class=en>at home</b>). house = הבניין עצמו."],
+ "take|bring":["bring או take","bring = להביא לכאן, אליי. take = לקחת לשם, הרחק ממני."],
+ "bring|take":["bring או take","bring = להביא למקום שבו אני נמצא. take = לקחת למקום אחר."],
+ "look|see":["see / look / watch","see = לראות (קורה מעצמו). look at = להסתכל בכוונה. watch = לצפות במשהו שזז (טלוויזיה, משחק)."],
+ "watch|see":["see / look / watch","watch לדברים שזזים או נמשכים: <b class=en>watch TV</b>, <b class=en>watch a movie</b>."],
+ "listen|hear":["hear או listen","hear = לשמוע (קורה מעצמו). listen to = להקשיב בכוונה: <b class=en>listen to music</b>."],
+ "hear|listen":["hear או listen","hear = לשמוע. listen = להקשיב, ותמיד עם to."],
+ "other|another":["other או another","another = עוד אחד, ביחיד (<b class=en>another coffee</b>). other לרבים או אחרי the (<b class=en>other people</b>, <b class=en>the other one</b>)."],
+ "another|other":["other או another","another = עוד אחד (יחיד). other בא עם רבים או אחרי the."],
+ "it|this":["it או this","it חוזר על משהו שכבר הוזכר. this מצביע על משהו קרוב, שמראים עליו."],
+ "there|it":["There is","\"יש\" באנגלית זה <b class=en>there is / there are</b>: <b class=en>There is a problem</b>, ולא It has a problem."],
+ "is|has":["There is","\"יש\" = <b class=en>there is</b>. <b class=en>There is a park near my house</b>, ולא It has a park."],
+};
 function explainMistake(target,given){
   const t=words(target),g=words(given),ops=diffOps(t,g),R=[],add=(k,title,text)=>{if(!R.some(x=>x.k===k))R.push({k,title,text})};
   const sameBag=t.length===g.length&&[...t].sort().join(" ")===[...g].sort().join(" ")&&t.join(" ")!==g.join(" ");
@@ -1376,8 +1487,9 @@ function explainMistake(target,given){
   }
   if(!sameBag)ops.forEach((o,ix)=>{
     const prev=ops.slice(0,ix).reverse().find(x=>x.op==="eq"||x.op==="sub"),pw=prev?(prev.a||""):"",next=ops.slice(ix+1).find(x=>x.op!=="ins");
-    if(o.op==="sub"){const a=o.a,b=o.b,va=verbBase(a),vb=verbBase(b);
-      if(va&&IRR[va]&&(b===va+"ed"||b===va+"d"))add("irr","פועל לא סדיר","לפועל "+bb(va)+" יש צורה מיוחדת: "+bb(a)+", ולא "+bb(b)+". בפעלים לא סדירים לא מוסיפים ed, ואת הצורות צריך לזכור: go → went, take → took, eat → ate.");
+    if(o.op==="sub"){const a=o.a,b=o.b,va=verbBase(a),vb=verbBase(b),px=PAIRX[a+"|"+b]||PAIRX[(va||a)+"|"+(vb||b)];
+      if(px)add("px:"+a+b,px[0],px[1]);
+      else if(va&&IRR[va]&&(b===va+"ed"||b===va+"d"))add("irr","פועל לא סדיר","לפועל "+bb(va)+" יש צורה מיוחדת: "+bb(a)+", ולא "+bb(b)+". בפעלים לא סדירים לא מוסיפים ed, ואת הצורות צריך לזכור: go → went, take → took, eat → ate.");
       else if(va&&va===vb){
         if(a.endsWith("ing"))add("prog","הווה מתמשך: ing","כשמשהו קורה עכשיו או נמשך, משתמשים ב-am / is / are ועוד פועל עם ing: "+bb(a)+". בעברית אותה צורה משמשת להרגל ולעכשיו, ובאנגלית יש שתי צורות שונות.");
         else if(t.some(w=>HAVE.has(w))&&a!==va&&!a.endsWith("s"))add("pp","הווה מושלם: have / has + צורה שלישית","אחרי have / has באה הצורה השלישית של הפועל (V3): "+bb("have "+a)+". למשל "+bb("I have seen")+", "+bb("She has finished")+".");
@@ -1407,6 +1519,9 @@ function explainMistake(target,given){
       else if(a==="not")add("neg","חסרה שלילה","חסר "+bb("not")+", ולכן המשמעות התהפכה. "+bb("don't")+" = do not, "+bb("isn't")+" = is not, "+bb("can't")+" = cannot.");
       else if(HAVE.has(a)&&!["have","has"].includes(pw))add("pp","הווה מושלם: have / has","כשמדברים על ניסיון או על משהו שהתחיל בעבר ועדיין רלוונטי, אומרים have / has + צורה שלישית: "+bb("I have never seen snow")+". בעברית אין זמן כזה, אז שמים לב אליו במיוחד.");
       else if(ARTS.has(a))add("art0","חסר "+a,"באנגלית שם עצם יחיד שאפשר לספור צריך "+bb("a / an")+" או "+bb("the")+" לפניו: "+bb("a book")+", "+bb("the door")+". בעברית אין מילה כזאת ל-a, ולכן קל לשכוח אותה.");
+      else if(a==="to"&&["listen","listening","listened","talk","talking","belong","explain","explained"].includes(pw))add("to2",pw+" to",bb(pw+" to")+": אחרי "+bb(pw)+" צריך to לפני מי או מה ששומעים. "+bb("listen to music")+", "+bb("explain to me")+".");
+      else if(a==="it"&&(ix===0||!prev)&&BE.has(nx))add("it0","חסר it","באנגלית לכל משפט צריך נושא, גם כשבעברית אין: ״יורד גשם״ = "+bb("It is raining")+", ״קר״ = "+bb("It is cold")+".");
+      else if(a==="there"&&BE.has(nx))add("there0","There is / There are","״יש״ במובן של ״קיים״ זה "+bb("there is")+" (יחיד) או "+bb("there are")+" (רבים): "+bb("There are many people here")+".");
       else if(a==="to"&&["want","need","like","hope","try","have","going","plan","forget","decide"].includes(pw))add("to","חסר to","אחרי "+bb(pw)+" בא to ואחריו פועל: "+bb(pw+" to go")+".");
       else if(PREPS.has(a))add("prep0:"+a,"חסרה מילת יחס","חסרה מילת היחס "+bb(a)+": אומרים "+bb((pw?pw+" ":"")+a+(nx?" "+nx:""))+".");
       else add("miss:"+a,"חסרה מילה","חסרה המילה "+bb(a)+".");
@@ -1414,6 +1529,10 @@ function explainMistake(target,given){
     if(o.op==="ins"){const b=o.b,nx=next&&next.a||"",vn=verbBase(nx);
       if(BE.has(b)&&vn&&!nx.endsWith("ing")&&nx===vn)add("bev","לא שמים am / is / are לפני פועל","אומרים "+bb("I agree")+", ולא "+bb("I am agree")+". am / is / are באים לפני תואר או שם ("+bb("I am happy")+"), או לפני פועל עם ing ("+bb("I am going")+").");
       else if(b==="to"&&MOD.has(pw))add("modto","בלי to אחרי "+pw,"אחרי can / must / should / will לא בא to: "+bb(pw+" "+(nx||"go"))+", ולא "+bb(pw+" to "+(nx||"go"))+".");
+      else if(b==="to"&&nx==="home")add("tohome","go home בלי to","לפני home לא שמים to: "+bb("go home")+", "+bb("come home")+". אבל "+bb("go to school")+", "+bb("go to work")+".");
+      else if(b==="more"&&/(er)$/.test(nx))add("moreer","בלי more ו-er יחד","או er או more, לא שניהם: "+bb(nx)+", ולא more "+nx+".");
+      else if(b==="me"&&["explain","describe","say"].includes(pw))add("explainme",pw+" to me","אחרי "+bb(pw)+" לא בא אדם ישירות: "+bb(pw+" it to me")+", ולא "+pw+" me.");
+      else if(["nothing","nobody","never","no"].includes(b)&&g.includes("not"))add("dneg","שלילה כפולה","באנגלית רק שלילה אחת: "+bb("I don't know anything")+" או "+bb("I know nothing")+", אבל לא שתיהן יחד.");
       else if(b==="the")add("the+","בלי the","כאן לא צריך "+bb("the")+". לא שמים the כשמדברים על משהו באופן כללי ("+bb("I like music")+"), או לפני שמות של אנשים וערים.");
       else if(b==="will"&&t.includes("if"))add("ifwill","אחרי if לא בא will","בחלק של if משתמשים בהווה, גם כשמדברים על העתיד: "+bb("If it rains, we will stay home")+", ולא "+bb("If it will rain")+".");
       else add("extra:"+b,"מילה מיותרת","המילה "+bb(b)+" מיותרת כאן.");
