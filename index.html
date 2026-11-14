@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>דַּבֵּר</title>
 <meta name="description" content="לומדים לדבר אנגלית: מסלול יומי מעברית לאנגלית">
-<script>window.APP_V="2026.11.14-1924";</script>
+<script>window.APP_V="2026.11.14-1932";</script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c94d14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -675,7 +675,7 @@ let S=structuredClone(DEFAULT);
 let saving=Promise.resolve();
 function save(){if(TEST)return;
   const snap=JSON.parse(JSON.stringify(S));
-  if(CLOUD){clearTimeout(save.t);save.t=setTimeout(()=>{saving=saving.then(()=>CLOUD.ref.set({data:JSON.stringify(snap),at:Date.now()}).then(()=>sha("daber-act:"+CLOUD.name)).then(h=>fsdb().collection("daber_activity").doc(h).set({last:snap.lastDay||"",lessons:((snap.days||{})[snap.lastDay]||{}).l||0,at:Date.now()}))).then(()=>{if(storageMode==="error"){storageMode="cloud";render()}}).catch(()=>{storageMode="error";render()})},400);try{localStorage.setItem(LOCAL_KEY+":"+CLOUD.name,JSON.stringify(snap))}catch(e){}return}
+  if(CLOUD){clearTimeout(save.t);save.t=setTimeout(()=>{saving=saving.then(()=>CLOUD.ref.set({data:JSON.stringify(snap),at:Date.now()}).then(()=>sha("daber-act:"+CLOUD.name)).then(h=>dref(h).set({last:snap.lastDay||"",lessons:((snap.days||{})[snap.lastDay]||{}).l||0,at:Date.now()}))).then(()=>{if(storageMode==="error"){storageMode="cloud";render()}}).catch(()=>{storageMode="error";render()})},400);try{localStorage.setItem(LOCAL_KEY+":"+CLOUD.name,JSON.stringify(snap))}catch(e){}return}
   if(REF){saving=saving.then(()=>REF.set(snap)).catch(()=>{storageMode="error";render()});}
   else{try{localStorage.setItem(LOCAL_KEY,JSON.stringify(snap))}catch(e){}}
 }
@@ -689,13 +689,16 @@ const hex=buf=>[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).j
 const sha=async t=>hex(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t)));
 async function deriveKey(name,pw){const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveBits"]);
   return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:new TextEncoder().encode("daber:"+name),iterations:150000,hash:"SHA-256"},base,256))}
+// Stored under the project's existing secret-key rule (spaces/{64-char key}/trip/meta): no rule change needed.
+// Daber's keys are SHA-256 / PBKDF2 hex strings, so they never meet the trip app's random keys.
+const dref=id=>fsdb().collection("spaces").doc(id).collection("trip").doc("meta");
 let FS=null;const fsdb=()=>{if(!FS){if(!firebase.apps.length)firebase.initializeApp(window.FIREBASE_CONFIG);FS=firebase.firestore()}return FS};
-async function openAccount(name,key){const db=fsdb();CLOUD={name,key,ref:db.collection("daber_users").doc(key)};
+async function openAccount(name,key){const db=fsdb();CLOUD={name,key,ref:dref(key)};
   const snap=await CLOUD.ref.get();if(snap.exists){try{S={...DEFAULT,...JSON.parse(snap.data().data)}}catch(e){}}else S=structuredClone(DEFAULT);storageMode="cloud"}
 async function login(name,pw,isNew){
   name=name.trim().toLowerCase();if(!/^[a-z0-9._-]{3,30}$/.test(name))throw "שם המשתמש צריך להיות באנגלית, 3 עד 30 תווים (אותיות, ספרות, נקודה או מקף).";
   if(pw.length<4)throw "הסיסמה צריכה להיות לפחות 4 תווים.";
-  const db=fsdb(),nh=await sha("daber-name:"+name),key=await deriveKey(name,pw),vk=await sha("daber-vk:"+key),nref=db.collection("daber_names").doc(nh);
+  const db=fsdb(),nh=await sha("daber-name:"+name),key=await deriveKey(name,pw),vk=await sha("daber-vk:"+key),nref=dref(nh);
   const ns=await nref.get();
   if(isNew){if(ns.exists)throw "שם המשתמש הזה כבר תפוס. נסו שם אחר, או היכנסו עם הסיסמה שלו.";await nref.set({vk,at:Date.now()})}
   else{if(!ns.exists)throw "לא מצאנו משתמש בשם הזה. אם זו הפעם הראשונה, לחצו \"משתמש חדש\".";if(ns.data().vk!==vk)throw "הסיסמה לא נכונה. נסו שוב."}
@@ -734,7 +737,7 @@ async function boot(){
   const timer=new Promise(r=>setTimeout(()=>r("timeout"),10000));
   if(hasCloud()){let ses=null;try{ses=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){}
     if(ses&&ses.skip){loadLocal();storageMode="local";view=S.onboarded?"home":"onboard";render()}
-    else if(ses&&ses.name&&ses.key){try{await openAccount(ses.name,ses.key)}catch(e){try{const l=localStorage.getItem(LOCAL_KEY+":"+ses.name);if(l)S={...DEFAULT,...JSON.parse(l)}}catch(e2){}CLOUD={name:ses.name,key:ses.key,ref:fsdb().collection("daber_users").doc(ses.key)};storageMode="error"}
+    else if(ses&&ses.name&&ses.key){try{await openAccount(ses.name,ses.key)}catch(e){try{const l=localStorage.getItem(LOCAL_KEY+":"+ses.name);if(l)S={...DEFAULT,...JSON.parse(l)}}catch(e2){}CLOUD={name:ses.name,key:ses.key,ref:dref(ses.key)};storageMode="error"}
       view=S.onboarded?"home":"onboard";render()}
     else{view="login";render()}
     return}
