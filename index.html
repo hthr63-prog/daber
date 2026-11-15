@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>דַּבֵּר</title>
 <meta name="description" content="לומדים לדבר אנגלית: מסלול יומי מעברית לאנגלית">
-<script>window.APP_V="2026.11.14-1932";</script>
+<script>window.APP_V="2026.11.15-1433";</script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#c94d14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -762,7 +762,17 @@ async function boot(){
 let AC=null;
 function tone(seq){if(!S.sound)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t0=AC.currentTime;
   seq.forEach(([f,dt,dur])=>{const o=AC.createOscillator(),g=AC.createGain();o.type="triangle";o.frequency.value=f;g.gain.setValueAtTime(.0001,t0+dt);g.gain.exponentialRampToValueAtTime(.18,t0+dt+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+dt+dur);o.connect(g).connect(AC.destination);o.start(t0+dt);o.stop(t0+dt+dur+.05)})}catch(e){}}
-const sfxOk=()=>tone([[660,0,.12],[990,.1,.2]]), sfxNo=()=>tone([[220,0,.25]]), sfxWin=()=>tone([[523,0,.15],[659,.12,.15],[784,.24,.15],[1046,.36,.35]]);
+// right answer: a bright rising chime that climbs a little higher with every answer in a row
+function sfxOk(){if(!S.sound)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();const t0=AC.currentTime,up=Math.pow(2,Math.min((SES&&SES.combo)||0,8)/12),out=AC.createGain();out.gain.value=.9;out.connect(AC.destination);
+  [[523.25,0],[659.25,.07],[783.99,.14],[1046.5,.21]].forEach(([f,dt],i)=>{[1,2,3].forEach((h,k)=>{const o=AC.createOscillator(),g=AC.createGain();o.type=k?"sine":"triangle";o.frequency.value=f*up*h;const v=[.22,.07,.03][k]*(i===3?1.2:1);
+    g.gain.setValueAtTime(.0001,t0+dt);g.gain.exponentialRampToValueAtTime(v,t0+dt+.012);g.gain.exponentialRampToValueAtTime(.0001,t0+dt+(i===3?.55:.22));o.connect(g).connect(out);o.start(t0+dt);o.stop(t0+dt+.6)})});
+  for(let k=0;k<5;k++){const o=AC.createOscillator(),g=AC.createGain(),dt=.24+k*.035;o.type="sine";o.frequency.value=2093*up*(1+k*.12);g.gain.setValueAtTime(.0001,t0+dt);g.gain.exponentialRampToValueAtTime(.05,t0+dt+.01);g.gain.exponentialRampToValueAtTime(.0001,t0+dt+.12);o.connect(g).connect(out);o.start(t0+dt);o.stop(t0+dt+.15)}
+}catch(e){}}
+// wrong answer: a low, falling "uh-oh"
+function sfxNo(){if(!S.sound)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();const t0=AC.currentTime,lp=AC.createBiquadFilter();lp.type="lowpass";lp.frequency.value=900;lp.connect(AC.destination);
+  [[311.13,0,.16],[233.08,.17,.38]].forEach(([f,dt,dur])=>{const o=AC.createOscillator(),g=AC.createGain();o.type="sawtooth";o.frequency.setValueAtTime(f,t0+dt);o.frequency.exponentialRampToValueAtTime(f*.82,t0+dt+dur);
+    g.gain.setValueAtTime(.0001,t0+dt);g.gain.exponentialRampToValueAtTime(.2,t0+dt+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+dt+dur);o.connect(g).connect(lp);o.start(t0+dt);o.stop(t0+dt+dur+.05)})}catch(e){}}
+const sfxWin=()=>tone([[523,0,.15],[659,.12,.15],[784,.24,.15],[1046,.36,.35]]);
 
 let playingBtn=null;
 function say(text,slow,btn){
@@ -974,7 +984,7 @@ function startJump(first){
   const T=ALL[first],units=[];LEVELS.forEach((L,li)=>L.units.forEach((_,ui)=>units.push([li,ui])));
   const ti=units.findIndex(([a,b])=>a===T.lv&&b===T.u),src=units.slice(Math.max(0,ti-2),ti);
   const ps=shuffle(src.flatMap(([a,b])=>unitPhrases(a,b))).slice(0,8);
-  const kinds=["dictate","bank","type","sayit","readmean","type","sayit","gap"];
+  const kinds=["dictate","bank","type","sayit","pickEn","type","sayit","gap"];
   runSession({title:`מבחן קפיצה · ${LEVELS[T.lv].units[T.u].t}`,items:ps.map((p,i)=>mkEx(kinds[i],p,p.lv)),jumpTo:first});
 }
 function openGuide(key){
@@ -1186,7 +1196,7 @@ function renderOnboard(){
 function startPlacement(){
   // every level tests all four skills; a level counts as passed only with 3 of 4 right AND at least one of writing/speaking right
   const speakOK=!!DICT;
-  const KS=[["readmean","read"],["dictate","listen"],["bank","write"],["type","write"]].concat(speakOK?[["repeat","speak"],["sayit","speak"]]:[]);
+  const KS=[["pickEn","read"],["dictate","listen"],["bank","write"],["type","write"]].concat(speakOK?[["repeat","speak"],["sayit","speak"]]:[]);
   const qs=[];LEVELS.forEach((L,li)=>{const ps=shuffle(levelPhrases(li)).slice(0,KS.length);KS.forEach(([k,sk],i)=>{const ex=mkEx(k,ps[i],li);ex.lv=li;ex.skill=sk;qs.push(ex)})});
   runSession({title:"מבחן רמה",items:qs,placement:true,skillBest:{},plN:KS.length,speakTested:speakOK});SES.total=KS.length;renderEx();
 }
@@ -1246,11 +1256,33 @@ Object.keys(IRR).forEach(v=>VERBS.add(v));
 function verbBase(w){if(VERBS.has(w))return w;for(const [b,fs] of Object.entries(IRR))if(fs.includes(w))return b;
   for(const [suf,add] of [["ing",""],["ing","e"],["ied","y"],["ies","y"],["ed",""],["ed","e"],["d",""],["es",""],["s",""]])if(w.endsWith(suf)){const b=w.slice(0,-suf.length)+add;if(VERBS.has(b))return b}
   return null}
+// English options that differ from the right answer in one small detail (verb form, negation, opposite word, pronoun, number)
+const EN_ANT={left:"right",right:"left",before:"after",after:"before",always:"never",never:"always",usually:"never",often:"rarely",big:"small",small:"big",hot:"cold",cold:"hot",early:"late",late:"early",open:"closed",closed:"open",up:"down",down:"up",yesterday:"tomorrow",tomorrow:"yesterday",today:"tomorrow",morning:"evening",evening:"morning",night:"morning",first:"last",last:"next",next:"last",more:"less",less:"more",new:"old",old:"new",buy:"sell",sell:"buy",come:"go",here:"there",there:"here",cheap:"expensive",expensive:"cheap",easy:"hard",hard:"easy",good:"bad",bad:"good",love:"hate",like:"hate",start:"finish",finish:"start",mother:"father",father:"mother",brother:"sister",sister:"brother",son:"daughter",he:"she",she:"he",his:"her",him:"her",my:"your",your:"my",our:"their",we:"they",they:"we",two:"three",three:"four",four:"five",five:"six",six:"seven",seven:"eight",eight:"nine",ten:"twelve",twenty:"thirty",this:"that",that:"this",these:"those",with:"without",without:"with",can:"must",should:"must",must:"can",agree:"disagree",remember:"forget",forget:"remember",win:"lose",lose:"win",happy:"sad",tired:"hungry",hungry:"tired",near:"far",far:"near",long:"short",short:"long",fast:"slow",slow:"fast",increase:"decrease",increased:"decreased",lowered:"raised",ask:"answer",question:"answer",friend:"neighbor",work:"school",home:"work",week:"month",month:"year",year:"week",day:"week",hour:"minute",minutes:"hours",hours:"minutes",breakfast:"dinner",dinner:"lunch",lunch:"breakfast",coffee:"tea",tea:"coffee",water:"juice",bus:"train",train:"bus",car:"bus",doctor:"teacher",teacher:"doctor"};
+const NEG={is:"isn't",are:"aren't",was:"wasn't",were:"weren't",can:"can't",will:"won't",do:"don't",does:"doesn't",did:"didn't",have:"haven't",has:"hasn't",should:"shouldn't",would:"wouldn't",could:"couldn't"};
+const UNNEG=Object.fromEntries(Object.entries(NEG).map(([a,b])=>[b,a]));
+function enMutants(en){
+  const toks=en.split(" "),out=new Map();
+  const put=(i,w,type)=>{const t=[...toks],m=toks[i].match(/^([^A-Za-z']*)([A-Za-z']+)([^A-Za-z']*)$/);if(!m)return;const core=m[2],cap=core[0]!==core[0].toLowerCase(),w2=cap?w[0].toUpperCase()+w.slice(1):w;t[i]=m[1]+w2+m[3];const s2=t.join(" ");if(!out.has(s2))out.set(s2,type)};
+  toks.forEach((tok,i)=>{const core=tok.replace(/[^A-Za-z']/g,""),low=core.toLowerCase();if(!core)return;
+    if(NEG[low]&&!/^(not|n't)/i.test((toks[i+1]||"")))put(i,NEG[low],"neg");
+    if(UNNEG[low])put(i,UNNEG[low],"neg");
+    if(EN_ANT[low])put(i,EN_ANT[low],"ant");
+    variants(core).forEach(v=>put(i,v.toLowerCase(),"form"))});
+  return [...out.entries()];
+}
+function pickEnOpts(p){
+  const tset=new Set(targets(p).map(t=>words(t).join(" "))),seen=new Set([words(p.en).join(" ")]),byType={neg:[],ant:[],form:[]};
+  shuffle(enMutants(p.en)).forEach(([s2,type])=>{const k=words(s2).join(" ");if(tset.has(k)||seen.has(k))return;seen.add(k);byType[type].push(s2)});
+  const pickd=[];["ant","form","neg","form","ant","neg"].forEach(t=>{if(pickd.length<3&&byType[t].length)pickd.push(byType[t].shift())});
+  if(pickd.length<3)similarPhrases(p,6).map(x=>x.en).filter(x=>!seen.has(words(x).join(" "))).slice(0,3-pickd.length).forEach(x=>pickd.push(x));
+  return shuffle([p.en,...pickd]);
+}
 function mkEx(kind,p,lv){
+  if(kind==="pickEn")return {kind,p,opts:pickEnOpts(p)};
   const pool=levelPhrases(lv).filter(x=>x.id!==p.id);
   if(kind==="readmean"||kind==="listen"){
     // near-miss options: the right sentence with one detail changed, plus real sentences that share most words
-    const ms=heMutants(p.he).slice(0,3);
+    const ms=heMutants(p.he).slice(0,3); // up to three near-miss meanings
     const muts=ms.map((he,i)=>({id:"m"+i+p.id,he}));
     const sim=similarPhrases(p,3-muts.length);
     return {kind,p,opts:shuffle([p,...muts,...sim])};
@@ -1293,7 +1325,7 @@ function buildLessonCore(L){
   let si=0,ri=0,wi=0,c=0;const nextP=()=>sub[(c++)%sub.length];
   const seen=[],sayUsed=new Set();
   return pattern.map(t=>{
-    let kind=t==="S"?speakKinds[si++]:t==="R"?(ri++?"gap":"readmean"):writeKinds[wi++],p;
+    let kind=t==="S"?speakKinds[si++]:t==="R"?(ri++?"gap":"pickEn"):writeKinds[wi++],p;
     if(kind==="sayit"){const cand=seen.filter(x=>!sayUsed.has(x.id));p=cand.length?pick(cand):nextP();sayUsed.add(p.id)}else p=nextP();
     if(!seen.some(x=>x.id===p.id))seen.push(p);
     return mkEx(kind,p,L.lv);
@@ -1305,7 +1337,7 @@ function startCustom(type){
   if(type==="review"){ps=shuffle(S.weak.map(phraseById)).slice(0,8)}
   else{const opened=ALL.filter((x,i)=>lessonState(i)!=="locked"&&x.lv>=S.start||S.done[x.id]);const units=[...new Set(opened.map(x=>x.lv+"."+x.u))];const pool=units.flatMap(s=>{const [a,b]=s.split(".").map(Number);return unitPhrases(a,b)});ps=shuffle(pool.length?pool:unitPhrases(S.start,0)).slice(0,8)}
   if(!ps.length)return;
-  const kinds=type==="speak"?["repeat","dictate","sayit","repeat","sayit","listen","sayit","sayit"]:["sayit","readmean","repeat","type","sayit","bank","sayit","repeat"];
+  const kinds=type==="speak"?["repeat","dictate","sayit","repeat","sayit","listen","sayit","sayit"]:["sayit","pickEn","repeat","type","sayit","bank","sayit","repeat"];
   const items=ps.map((p,i)=>mkEx(kinds[i%kinds.length],p,p.lv));
   runSession({title:type==="speak"?"אימון דיבור":"חזרה על טעויות",items,review:type==="review"});
 }
@@ -1317,7 +1349,7 @@ function runSession(cfg){
   SES={...cfg,oral:0,missed:[],queue:[...cfg.items],total:cfg.items.length,done:0,firstTry:0,mistakes:0,retried:new Set(),noSpeak:false,answered:false,placeWrong:{},placeLevel:null};
   view="lesson";renderEx();
 }
-const SKILL={spick:["s","צלילים"],word:["s","מילים · דיבור"],wordtype:["w","מילים · כתיבה"],dictate:["s","האזנה"],listen:["s","האזנה"],repeat:["s","דיבור"],sayit:["s","דיבור"],readmean:["r","קריאה"],gap:["r","קריאה"],bank:["w","כתיבה"],type:["w","כתיבה"]};
+const SKILL={pickEn:["r","קריאה"],spick:["s","צלילים"],word:["s","מילים · דיבור"],wordtype:["w","מילים · כתיבה"],dictate:["s","האזנה"],listen:["s","האזנה"],repeat:["s","דיבור"],sayit:["s","דיבור"],readmean:["r","קריאה"],gap:["r","קריאה"],bank:["w","כתיבה"],type:["w","כתיבה"]};
 let confs=[];
 let cur=null, recState="idle", spoken="", partial="", unsubs=[];
 function renderEx(){
@@ -1332,6 +1364,7 @@ function renderEx(){
   const listenBtns=t=>`<div class="listen"><button class="ic" data-say="${esc(t)}" data-alt="1" aria-label="השמעה (לחיצה נוספת משמיעה לאט)">${ICON.speaker}<em class="slowtag" aria-hidden="true">לאט</em></button></div>`;
   if(e.kind==="repeat"&&!typeSpeak){instr="הקשיבו וחזרו על המשפט בקול";content=`<div class="prompt">${listenBtns(e.p.en)}<div class="txt en">${esc(e.p.en)}</div></div><p class="muted" style="margin:0">${esc(e.p.he)}</p>`}
   if(e.kind==="repeat"&&typeSpeak){instr="הקשיבו וכתבו באנגלית את מה ששמעתם";content=`<div class="prompt" style="justify-content:center">${listenBtns(e.p.en)}<div class="txt muted" style="flex:none;font-size:17px">בלי לקרוא, רק לשמוע</div></div>`}
+  if(e.kind==="pickEn"){instr="בחרו את התרגום המדויק";content=`<div class="prompt"><div class="txt he">${esc(e.p.he)}</div></div><p class="muted" style="margin:0;font-size:15px">שימו לב לכל מילה: ההבדלים קטנים.</p><div class="opts">${e.opts.map((o,i)=>`<button class="opt en" data-opt="${i}" aria-pressed="false">${esc(o)}</button>`).join("")}</div>`}
   if(e.kind==="spick"){instr="איזו מילה שמעתם?";content=`<div class="prompt" style="justify-content:center">${listenBtns(e.p.en)}<div class="txt muted" style="flex:none;font-size:17px">הקשיבו טוב לצליל</div></div><div class="opts two">${e.opts.map((o,i)=>`<button class="opt en big" data-opt="${i}" aria-pressed="false">${esc(o)}</button>`).join("")}</div>`}
   if(e.kind==="word"&&e.showEn){instr="אמרו את המילה בקול";content=`<div class="wordcard">${listenBtns(e.p.en)}<span class="he en" lang="en">${esc(e.p.en)}</span><small class="muted">${esc(e.p.he)}</small></div>`}
   else if(e.kind==="wordtype"&&e.audio){instr="הקשיבו וכתבו את המילה";content=`<div class="prompt" style="justify-content:center">${listenBtns(e.p.en)}<div class="txt muted" style="flex:none;font-size:17px">בלי לקרוא, רק לשמוע</div></div><textarea id="typed" class="short" lang="en" aria-labelledby="instr" placeholder="כתבו כאן באנגלית" autocomplete="off" autocapitalize="off" spellcheck="false" autocorrect="off"></textarea>`}
@@ -1381,7 +1414,8 @@ function renderEx(){
   if(check)check.onclick=()=>{
     if(SES.answered){next();return}
     const btns=[...el.querySelectorAll("[data-opt]")];
-    if(e.kind==="readmean"||e.kind==="listen"||e.kind==="gap"||e.kind==="spick"){const right=e.kind==="spick"?e.opts.indexOf(e.p.en):e.kind==="gap"?e.opts.findIndex(o=>o.toLowerCase()===e.word.toLowerCase()):e.opts.findIndex(o=>o.id===e.p.id);const ok=chosen===right,plc=SES.placement;
+    if(e.kind==="readmean"||e.kind==="listen"||e.kind==="gap"||e.kind==="spick"||e.kind==="pickEn"){const right=e.kind==="spick"||e.kind==="pickEn"?e.opts.indexOf(e.p.en):e.kind==="gap"?e.opts.findIndex(o=>o.toLowerCase()===e.word.toLowerCase()):e.opts.findIndex(o=>o.id===e.p.id);const ok=chosen===right,plc=SES.placement;
+      if(e.kind==="pickEn")SES.given=e.opts[chosen];
       if(e.kind==="gap")SES.given=e.pre!=null?(e.pre+" "+e.opts[chosen]+" "+e.post):e.p.en.split(" ").map((w,j)=>j===e.i?w.replace(e.word,e.opts[chosen]):w).join(" ");
       grade(ok,{});if(!plc){btns[chosen].classList.add(ok?"right":"wrong");if(!ok)setTimeout(()=>btns[right].classList.add("right"),250)}}
     else if(e.kind==="bank"||e.kind==="dictate"){const slot=$("#slot");const got=[...slot.children].map(t=>t.textContent).join(" ");SES.given=got;const ok=targets(e.p).some(t=>words(t).join(" ")===words(got).join(" "));
@@ -1438,7 +1472,7 @@ function evalSpeech(said){SES.given=said;
   setTimeout(()=>{const h=$("#heard");if(h)h.scrollIntoView({block:"nearest",behavior:RM()?"auto":"smooth"})},350);
 }
 /* ---------- mistake explainer ---------- */
-const WHYK=new Set(["sayit","type","bank","dictate","gap","word","wordtype"]);
+const WHYK=new Set(["pickEn","sayit","type","bank","dictate","gap","word","wordtype"]);
 const BE=new Set(["am","is","are","was","were","be","been"]),AUXD=new Set(["do","does","did"]),MOD=new Set(["can","could","must","should","will","would","might","may"]),
   ARTS=new Set(["a","an","the"]),PREPS=new Set(["in","on","at","to","for","with","from","of","by","into","about","until","since"]),
   FREQ=new Set(["always","usually","often","sometimes","never","rarely","already","just"]),HAVE=new Set(["have","has","had"]),
@@ -1594,7 +1628,7 @@ function showWhy(e,given){
   const rules=best.R.length?best.R:[{title:"המשפט הנכון",text:"השוו בין מה שכתבתם למשפט הנכון. מילים בירוק חסרו, ומילים מחוקות באדום מיותרות."}];
   const box=document.createElement("section");box.className="whybox";box.setAttribute("aria-label","הסבר על הטעות");
   box.innerHTML=`<div class="why-h">${mascot("think",44)}<h2>למה זה לא נכון?</h2></div>
-   <div class="why-cmp"><div><small>${e.kind==="sayit"||e.kind==="word"?"אמרתם":"כתבתם"}</small><div class="why-diff en" lang="en" dir="ltr">${best.mine||"–"}</div></div>
+   <div class="why-cmp"><div><small>${e.kind==="sayit"||e.kind==="word"?"אמרתם":e.kind==="pickEn"||e.kind==="gap"?"בחרתם":"כתבתם"}</small><div class="why-diff en" lang="en" dir="ltr">${best.mine||"–"}</div></div>
    <div><small>נכון</small><div class="why-diff en" lang="en" dir="ltr">${hlTarget(best.t,best.flags)}</div></div></div>
    <div class="why-legend"><span><u class="bad">קו אדום</u> = כאן הטעות</span><span><u class="good">קו ירוק</u> = כך צריך להיות</span></div>
    ${rules.map(r=>`<div class="why-rule"><h3>${r.title}</h3><p>${r.text}</p></div>`).join("")}
